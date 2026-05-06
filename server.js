@@ -117,7 +117,7 @@ app.post("/api/send-notification", async (req, res) => {
     const payload = JSON.stringify({
       title: req.body?.title || "Antivirus Scanner",
       body: req.body?.body || "Virus scan completed successfully.",
-      icon: req.body?.icon || "/icon.png",
+      icon: req.body?.icon || "/111.png",
       tag: `scan-${Date.now()}-${currentRound}`,
     });
 
