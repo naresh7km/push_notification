@@ -9,7 +9,7 @@
       body {
         margin: 0;
         min-height: 100vh;
-        font-family: "Segoe UI", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+        font-family: "Segoe UI", system-ui, sans-serif;
         background: #f5f1ee;
         color: #111;
         display: flex;
@@ -23,25 +23,17 @@
         background: #feeb29;
         border-radius: 16px;
         padding: 28px;
-        border: 2px solid rgba(17, 17, 17, 0.15);
-        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+        border: 2px solid rgba(17,17,17,0.15);
+        box-shadow: 0 18px 40px rgba(0,0,0,0.12);
         text-align: center;
       }
-      h1 { margin: 0 0 8px; font-size: 1.25rem; }
-      .status-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.8rem;
-        font-weight: 600;
-        padding: 4px 12px;
-        border-radius: 999px;
+      h1 { margin: 0 0 6px; font-size: 1.25rem; }
+      .sub-count {
+        font-size: 0.85rem;
         margin-bottom: 20px;
+        opacity: 0.75;
       }
-      .status-badge.ok { background: #d4f7d4; color: #1a6e1a; }
-      .status-badge.warn { background: #fff0c2; color: #7a5200; }
-      .status-badge.err { background: #fdd; color: #8b0000; }
-      .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+      .sub-count strong { opacity: 1; }
       button {
         width: 100%;
         padding: 14px 20px;
@@ -52,138 +44,54 @@
         border-radius: 999px;
         background: #111;
         color: #feeb29;
-        margin-top: 8px;
       }
       button:hover:not(:disabled) { background: #2a2a2a; }
       button:disabled { opacity: 0.5; cursor: not-allowed; }
-      button.secondary {
-        background: transparent;
-        color: #111;
-        border: 2px solid #111;
-        margin-top: 10px;
-        font-size: 0.9rem;
-        padding: 10px 20px;
-      }
       pre {
         margin: 18px 0 0;
         text-align: left;
         font-size: 11px;
         line-height: 1.45;
         padding: 12px;
-        background: rgba(255, 255, 255, 0.55);
+        background: rgba(255,255,255,0.55);
         border-radius: 8px;
         overflow-x: auto;
         white-space: pre-wrap;
         word-break: break-word;
+        min-height: 40px;
       }
     </style>
   </head>
   <body>
     <div class="card">
       <h1>Manual push</h1>
-      <div id="badge" class="status-badge warn"><span class="dot"></span><span id="badgeText">Checking…</span></div>
-      <button type="button" id="sendBtn" disabled>Send push notification</button>
-      <button type="button" id="subBtn" class="secondary" style="display:none">Enable notifications</button>
+      <p class="sub-count" id="subCount">Loading subscriber count…</p>
+      <button type="button" id="sendBtn">Send push notification</button>
       <pre id="status">&nbsp;</pre>
     </div>
 
     <script>
       const BACKEND = "https://push-notification-78s4.onrender.com";
-
-      const sendBtn = document.getElementById("sendBtn");
-      const subBtn  = document.getElementById("subBtn");
-      const badge   = document.getElementById("badge");
-      const badgeText = document.getElementById("badgeText");
+      const sendBtn  = document.getElementById("sendBtn");
       const statusEl = document.getElementById("status");
+      const subCount = document.getElementById("subCount");
 
-      let swReg = null;
-
-      function setBadge(state, text) {
-        badge.className = "status-badge " + state;
-        badgeText.textContent = text;
-      }
-
-      function log(msg) {
-        statusEl.textContent = msg;
-      }
-
-      function urlBase64ToUint8Array(base64String) {
-        const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-        const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-        const raw = atob(base64);
-        return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
-      }
-
-      async function subscribe() {
-        subBtn.disabled = true;
-        log("Requesting notification permission…");
-
-        const permission = await Notification.requestPermission();
-        if (permission !== "granted") {
-          setBadge("err", "Permission denied");
-          log("Notification permission was denied. Please allow it in browser settings.");
-          subBtn.disabled = false;
-          return false;
-        }
-
-        log("Fetching VAPID public key…");
-        let vapidKey;
+      async function loadHealth() {
         try {
-          const r = await fetch(`${BACKEND}/api/vapid-public-key`);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          ({ publicKey: vapidKey } = await r.json());
-          if (!vapidKey) throw new Error("Empty key returned");
-        } catch (e) {
-          setBadge("err", "Backend unreachable");
-          log("Could not fetch VAPID key:\n" + e);
-          subBtn.disabled = false;
-          return false;
-        }
-
-        log("Subscribing via Push API…");
-        let sub;
-        try {
-          const existing = await swReg.pushManager.getSubscription();
-          if (existing) {
-            sub = existing;
-          } else {
-            sub = await swReg.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(vapidKey),
-            });
+          const res = await fetch(`${BACKEND}/api/health`);
+          const data = await res.json();
+          subCount.innerHTML = `Active subscribers: <strong>${data.subscriptions}</strong>`;
+          if (data.subscriptions === 0) {
+            subCount.innerHTML += " — no one subscribed yet";
           }
         } catch (e) {
-          setBadge("err", "Subscription failed");
-          log("pushManager.subscribe() failed:\n" + e);
-          subBtn.disabled = false;
-          return false;
-        }
-
-        log("Registering subscription with backend…");
-        try {
-          const r = await fetch(`${BACKEND}/api/subscribe`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(sub.toJSON()),
-          });
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const data = await r.json();
-          setBadge("ok", "Subscribed ✓");
-          log("Subscription registered.\n" + JSON.stringify(data, null, 2));
-          sendBtn.disabled = false;
-          subBtn.style.display = "none";
-          return true;
-        } catch (e) {
-          setBadge("err", "Register failed");
-          log("Failed to POST subscription to backend:\n" + e);
-          subBtn.disabled = false;
-          return false;
+          subCount.textContent = "Could not reach backend.";
         }
       }
 
       async function send() {
         sendBtn.disabled = true;
-        log("Sending…");
+        statusEl.textContent = "Sending…";
         try {
           const res = await fetch(`${BACKEND}/api/send-notification`, {
             method: "POST",
@@ -196,84 +104,17 @@
             }),
           });
           const data = await res.json().catch(() => ({ parseError: true }));
-          log(`HTTP ${res.status}\n` + JSON.stringify(data, null, 2));
+          statusEl.textContent = `HTTP ${res.status}\n` + JSON.stringify(data, null, 2);
+          await loadHealth();
         } catch (err) {
-          log("Fetch error:\n" + err);
+          statusEl.textContent = "Fetch error:\n" + err;
         } finally {
           sendBtn.disabled = false;
         }
       }
 
-      async function init() {
-        if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-          setBadge("err", "Not supported");
-          log("This browser does not support Push notifications.");
-          return;
-        }
-
-        log("Registering service worker…");
-        try {
-          swReg = await navigator.serviceWorker.register("/sw.js");
-          await navigator.serviceWorker.ready;
-        } catch (e) {
-          setBadge("err", "SW failed");
-          log("Service worker registration failed:\n" + e);
-          return;
-        }
-
-        if (Notification.permission === "denied") {
-          setBadge("err", "Permission denied");
-          log("Notifications are blocked. Unblock them in your browser settings, then reload.");
-          return;
-        }
-
-        if (Notification.permission === "granted") {
-          // Already permitted — check if we have a live push subscription
-          const existing = await swReg.pushManager.getSubscription();
-          if (existing) {
-            // Re-register with backend in case it restarted and lost state
-            setBadge("warn", "Re-registering…");
-            log("Re-sending existing subscription to backend…");
-            try {
-              const vapidRes = await fetch(`${BACKEND}/api/vapid-public-key`);
-              const { publicKey: vapidKey } = await vapidRes.json();
-              // Check if the existing subscription's app server key matches
-              const r = await fetch(`${BACKEND}/api/subscribe`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(existing.toJSON()),
-              });
-              if (r.ok) {
-                setBadge("ok", "Ready ✓");
-                log("Subscription synced with backend. You can send now.");
-                sendBtn.disabled = false;
-              } else {
-                throw new Error(`HTTP ${r.status}`);
-              }
-            } catch (e) {
-              setBadge("err", "Sync failed");
-              log("Could not sync subscription with backend:\n" + e);
-              subBtn.style.display = "block";
-              subBtn.disabled = false;
-            }
-            return;
-          }
-          // Permission granted but no push subscription yet
-          await subscribe();
-          return;
-        }
-
-        // Permission is "default" — show the subscribe button
-        setBadge("warn", "Not subscribed");
-        log("Click 'Enable notifications' to grant permission and subscribe.");
-        subBtn.style.display = "block";
-        subBtn.disabled = false;
-      }
-
-      subBtn.addEventListener("click", subscribe);
       sendBtn.addEventListener("click", send);
-
-      init();
+      loadHealth();
     </script>
   </body>
 </html>
