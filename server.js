@@ -1,5 +1,6 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const webpush = require("web-push");
 
 const app = express();
@@ -8,6 +9,7 @@ const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "mailto:admin@example.com";
 const backendStartedAt = new Date().toISOString();
+const SUBS_FILE = path.join(__dirname, "subscriptions.json");
 
 function logInfo(message, meta = {}) {
   console.log(`[push-backend][info] ${message}`, meta);
@@ -55,7 +57,26 @@ app.use((req, res, next) => {
   return next();
 });
 
-const subscriptions = new Map();
+function loadSubscriptions() {
+  try {
+    const raw = fs.readFileSync(SUBS_FILE, "utf8");
+    const entries = JSON.parse(raw);
+    return new Map(entries);
+  } catch (_) {
+    return new Map();
+  }
+}
+
+function saveSubscriptions(map) {
+  try {
+    fs.writeFileSync(SUBS_FILE, JSON.stringify([...map.entries()]), "utf8");
+  } catch (e) {
+    logWarn("Could not persist subscriptions.", { message: e.message });
+  }
+}
+
+const subscriptions = loadSubscriptions();
+logInfo("Loaded persisted subscriptions.", { count: subscriptions.size });
 
 app.get("/api/vapid-public-key", (_req, res) => {
   logInfo("Serving VAPID public key.", { hasKey: Boolean(VAPID_PUBLIC_KEY) });
@@ -80,6 +101,7 @@ app.post("/api/subscribe", (req, res) => {
   }
 
   subscriptions.set(subscription.endpoint, subscription);
+  saveSubscriptions(subscriptions);
   logInfo("Subscription saved.", {
     endpointTail: subscription.endpoint.slice(-24),
     totalSubscriptions: subscriptions.size,
@@ -151,6 +173,7 @@ app.post("/api/send-notification", async (req, res) => {
   }
 
   stale.forEach((endpoint) => subscriptions.delete(endpoint));
+  if (stale.length) saveSubscriptions(subscriptions);
   logInfo("Notification batch complete.", {
     sent,
     staleRemoved: stale.length,
