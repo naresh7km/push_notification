@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manual push</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family:
+          "Segoe UI", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+        background: #f5f1ee;
+        color: #111;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        width: 100%;
+        max-width: 420px;
+        background: #feeb29;
+        border-radius: 16px;
+        padding: 28px;
+        border: 2px solid rgba(17, 17, 17, 0.15);
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.12);
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.25rem;
+      }
+      p {
+        margin: 0 0 20px;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        opacity: 0.85;
+      }
+      button {
+        width: 100%;
+        padding: 14px 20px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        border-radius: 999px;
+        background: #111;
+        color: #feeb29;
+      }
+      button:hover {
+        background: #2a2a2a;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      pre {
+        margin: 18px 0 0;
+        text-align: left;
+        font-size: 11px;
+        line-height: 1.45;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.55);
+        border-radius: 8px;
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Manual push</h1>
+      <p>
+        Open this page on your <strong>Render</strong> URL (not as a local
+        file), then tap the button to call
+        <code>/api/send-notification</code>.
+      </p>
+      <button type="button" id="sendBtn">Send push notification</button>
+      <pre id="status">&nbsp;</pre>
+    </div>
+    <script>
+      const FALLBACK_API_BASE = "https://push-notification-78s4.onrender.com";
+
+      function getApiBase() {
+        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+          return window.location.origin;
+        }
+        return FALLBACK_API_BASE;
+      }
+
+      const sendBtn = document.getElementById("sendBtn");
+      const statusEl = document.getElementById("status");
+
+      sendBtn.addEventListener("click", async () => {
+        const apiBase = getApiBase();
+        statusEl.textContent = "Sending…";
+        sendBtn.disabled = true;
+        try {
+          const res = await fetch(`${apiBase}/api/send-notification`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: "Antivirus Scanner",
+              body: "Virus scan completed successfully.",
+              icon: "/icon.png",
+              count: 15,
+              delayMs: 2000,
+              batchSize: 3,
+            }),
+          });
+          const data = await res.json().catch(() => ({ parseError: true }));
+          statusEl.textContent =
+            `HTTP ${res.status}\n` + JSON.stringify(data, null, 2);
+        } catch (err) {
+          statusEl.textContent = String(err);
+        } finally {
+          sendBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

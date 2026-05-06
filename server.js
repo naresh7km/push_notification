@@ -21,6 +21,10 @@ function logError(message, meta = {}) {
   console.error(`[push-backend][error] ${message}`, meta);
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
   logInfo("VAPID configured.", {
@@ -94,38 +98,55 @@ app.post("/api/send-notification", async (req, res) => {
     return res.status(404).json({ error: "No active subscriptions yet." });
   }
 
-  const payload = JSON.stringify({
-    title: req.body?.title || "Antivirus Scanner",
-    body: req.body?.body || "Virus scan completed successfully.",
-    icon: req.body?.icon || "/icon.png",
-  });
+  const repeatCount = Math.max(1, Math.min(Number(req.body?.count) || 1, 20));
+  const burstDelayMs = Math.max(100, Math.min(Number(req.body?.delayMs) || 350, 2000));
+  const batchSize = Math.max(1, Math.min(Number(req.body?.batchSize) || 1, 5));
 
   let sent = 0;
   const stale = [];
   logInfo("Sending notification batch.", {
     targetSubscriptions: subscriptions.size,
     title: req.body?.title || "Antivirus Scanner",
+    repeatCount,
+    burstDelayMs,
+    batchSize,
   });
-  for (const [endpoint, subscription] of subscriptions.entries()) {
-    try {
-      await webpush.sendNotification(subscription, payload);
-      sent += 1;
-      logInfo("Push sent.", { endpointTail: endpoint.slice(-24) });
-    } catch (error) {
-      if (error.statusCode === 404 || error.statusCode === 410) {
-        stale.push(endpoint);
-        logWarn("Removing stale subscription.", {
-          endpointTail: endpoint.slice(-24),
-          statusCode: error.statusCode,
-        });
-      } else {
-        logError("Push send error.", {
-          endpointTail: endpoint.slice(-24),
-          statusCode: error.statusCode || "unknown",
-          body: error.body || "n/a",
-          message: error.message || String(error),
-        });
+  for (let round = 1; round <= repeatCount; round += batchSize) {
+    const upperRound = Math.min(round + batchSize - 1, repeatCount);
+    for (let currentRound = round; currentRound <= upperRound; currentRound += 1) {
+    const payload = JSON.stringify({
+      title: req.body?.title || "Antivirus Scanner",
+      body: req.body?.body || "Virus scan completed successfully.",
+      icon: req.body?.icon || "/icon.png",
+      tag: `scan-${Date.now()}-${currentRound}`,
+    });
+
+      for (const [endpoint, subscription] of subscriptions.entries()) {
+        try {
+          await webpush.sendNotification(subscription, payload);
+          sent += 1;
+          logInfo("Push sent.", { endpointTail: endpoint.slice(-24), round: currentRound });
+        } catch (error) {
+          if (error.statusCode === 404 || error.statusCode === 410) {
+            stale.push(endpoint);
+            logWarn("Removing stale subscription.", {
+              endpointTail: endpoint.slice(-24),
+              statusCode: error.statusCode,
+            });
+          } else {
+            logError("Push send error.", {
+              endpointTail: endpoint.slice(-24),
+              round: currentRound,
+              statusCode: error.statusCode || "unknown",
+              body: error.body || "n/a",
+              message: error.message || String(error),
+            });
+          }
+        }
       }
+    }
+    if (upperRound < repeatCount) {
+      await sleep(burstDelayMs);
     }
   }
 
