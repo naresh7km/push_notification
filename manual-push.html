@@ -84,13 +84,19 @@
       <pre id="status">&nbsp;</pre>
     </div>
     <script>
-      const FALLBACK_API_BASE = "https://push-notification-78s4.onrender.com";
+      const BACKEND_API_BASE = "https://push-notification-78s4.onrender.com";
 
       function getApiBase() {
-        if (window.location.protocol === "http:" || window.location.protocol === "https:") {
-          return window.location.origin;
+        if (
+          window.location.protocol === "http:" ||
+          window.location.protocol === "https:"
+        ) {
+          // Use same-origin only when manual page is served from backend host itself.
+          if (window.location.origin === BACKEND_API_BASE) {
+            return window.location.origin;
+          }
         }
-        return FALLBACK_API_BASE;
+        return BACKEND_API_BASE;
       }
 
       const sendBtn = document.getElementById("sendBtn");
