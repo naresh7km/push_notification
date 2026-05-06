@@ -88,12 +88,7 @@
     </div>
 
     <script>
-      const BACKEND = (() => {
-        const p = window.location.protocol;
-        return (p === "http:" || p === "https:")
-          ? window.location.origin
-          : "https://push-notification-78s4.onrender.com";
-      })();
+      const BACKEND = "https://push-notification-78s4.onrender.com";
 
       const sendBtn = document.getElementById("sendBtn");
       const subBtn  = document.getElementById("subBtn");
