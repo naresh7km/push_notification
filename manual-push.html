@@ -104,10 +104,11 @@
 
       sendBtn.addEventListener("click", async () => {
         const apiBase = getApiBase();
+        const endpoint = `${apiBase}/api/send-notification`;
         statusEl.textContent = "Sending…";
         sendBtn.disabled = true;
         try {
-          const res = await fetch(`${apiBase}/api/send-notification`, {
+          const res = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -119,9 +120,16 @@
               batchSize: 3,
             }),
           });
-          const data = await res.json().catch(() => ({ parseError: true }));
+          const raw = await res.text();
+          let data = null;
+          try {
+            data = raw ? JSON.parse(raw) : {};
+          } catch (_e) {
+            data = { parseError: true, rawResponse: raw };
+          }
           statusEl.textContent =
-            `HTTP ${res.status}\n` + JSON.stringify(data, null, 2);
+            `POST ${endpoint}\nHTTP ${res.status}\n` +
+            JSON.stringify(data, null, 2);
         } catch (err) {
           statusEl.textContent = String(err);
         } finally {
