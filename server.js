@@ -40,11 +40,13 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 app.use((req, _res, next) => {
-  logInfo("Incoming request", {
-    method: req.method,
-    path: req.path,
-    origin: req.headers.origin || "n/a",
-  });
+  if (req.path !== "/api/health") {
+    logInfo("Incoming request", {
+      method: req.method,
+      path: req.path,
+      origin: req.headers.origin || "n/a",
+    });
+  }
   next();
 });
 app.use((req, res, next) => {
